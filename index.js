@@ -37,46 +37,84 @@
 
 const express = require('express');
 const bodyParser = require('body-parser');
+const sharp = require('sharp');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Middleware to handle raw SVG input
 app.use(bodyParser.text({ type: 'image/svg+xml' }));
 
-// 🔑 Replace these with your real keys
-const supabaseUrl = 'https://alvbesuymdhckhtyplhl.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsdmJlc3V5bWRoY2todHlwbGhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0MTQ0NTgsImV4cCI6MjA2OTk5MDQ1OH0.L8IU3u5SJSlHmDoLL6Bt22M05VeqWZWX36p6COG5Iqo';
-const supabase = createClient(supabaseUrl, supabaseKey);
+// 🔐 Supabase Setup (REPLACE THESE)
+const supabase = createClient(
+  'https://alvbesuymdhckhtyplhl.supabase.co',  // ✅ Your Supabase Project URL
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFsdmJlc3V5bWRoY2todHlwbGhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ0MTQ0NTgsImV4cCI6MjA2OTk5MDQ1OH0.L8IU3u5SJSlHmDoLL6Bt22M05VeqWZWX36p6COG5Iqo'                    // ✅ Your Supabase anon public key
+);
+const BUCKET_NAME = 'svg-uploads'; // Your Supabase Storage bucket name
 
-const BUCKET_NAME = 'svg-uploads';
-
+// 🔄 Upload SVG and return short link
 app.post('/upload-svg', async (req, res) => {
   const svgData = req.body;
 
-  if (!svgData || !svgData.startsWith('<svg')) {
-    return res.status(400).json({ error: 'Invalid SVG data.' });
+  if (!svgData || !svgData.trim().startsWith('<svg')) {
+    return res.status(400).json({ error: 'Invalid SVG data' });
   }
 
-  const filename = `svg-${Date.now()}.svg`;
+  try {
+    // 🖼️ Convert SVG → PNG (high quality)
+    const pngBuffer = await sharp(Buffer.from(svgData), { density: 300 })
+      .png({ quality: 100, compressionLevel: 0 })
+      .toBuffer();
 
-  const { error } = await supabase.storage
-    .from(BUCKET_NAME)
-    .upload(filename, svgData, {
-      contentType: 'image/svg+xml',
-      upsert: false,
+    const filename = `svg-${Date.now()}.png`;
+
+    // Upload PNG to Supabase
+    const { error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(filename, pngBuffer, {
+        contentType: 'image/png',
+        upsert: false,
+      });
+
+    if (error) {
+      console.error('Upload error:', error);
+      return res.status(500).json({ error: 'Upload failed' });
+    }
+
+    // Return short clean URL
+    const shortUrl = `https://svglink.onrender.com/img/${filename}`;
+
+    res.json({
+      message: 'PNG uploaded',
+      filename: filename,
+      shortUrl: shortUrl
     });
 
-  if (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Upload failed' });
+  } catch (err) {
+    console.error('Conversion error:', err);
+    res.status(500).json({ error: 'Conversion failed' });
+  }
+});
+
+// 📦 Short redirect route for Excel-friendly URLs
+app.get('/img/:filename', async (req, res) => {
+  const filename = req.params.filename;
+
+  const { data } = supabase.storage
+    .from(BUCKET_NAME)
+    .getPublicUrl(filename);
+
+  if (!data || !data.publicUrl) {
+    return res.status(404).send('Image not found');
   }
 
-  const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(filename);
-
-  res.json({ message: 'SVG uploaded', url: data.publicUrl });
+  return res.redirect(data.publicUrl);
 });
 
+// ✅ Start server
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`✅ Server running on port ${port}`);
 });
+
+
