@@ -1,0 +1,25 @@
+# Node modules
+node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Uploads or temp files
+uploads/
+
+# Environment files
+.env
+
+# IDE files
+.vscode/
+.idea/
+
+# Dependency lock files (optional)
+# Uncomment if you don't want to track them
+# package-lock.json
