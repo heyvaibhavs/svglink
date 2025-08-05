@@ -25,7 +25,7 @@ app.post('/upload-svg', (req, res) => {
     if (err) return res.status(500).json({ error: 'Could not save SVG file.' });
 
     // Replace localhost with your domain in production
-    const fileUrl = `http://localhost:${port}/uploads/${filename}`;
+    const fileUrl = `${req.protocol}://${req.headers.host}/uploads/${filename}`;
     res.json({ message: 'SVG uploaded', url: fileUrl });
   });
 });
